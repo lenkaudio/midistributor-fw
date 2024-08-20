@@ -2,6 +2,7 @@
  * The MIT License (MIT)
  *
  * Copyright (c) 2019 Ha Thach (tinyusb.org)
+ * Copyright (c) 2024 Lena Kryger (lenkaud.io)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -98,9 +99,9 @@
 #define CFG_TUD_VENDOR            0
 
 // Number of virtual MIDI cables IN to the host
-#define CFG_TUD_MIDI_NUMCABLES_IN 2
+#define CFG_TUD_MIDI_NUMCABLES_IN 4
 // Number of virtual MIDI cables OUT from the host
-#define CFG_TUD_MIDI_NUMCABLES_OUT 6
+#define CFG_TUD_MIDI_NUMCABLES_OUT 4
 // Support MIDI port string labels after the serial number string
 // Set this to the first available string descriptor number or
 // 0 if you do not wish to label the MIDI jacks with strings

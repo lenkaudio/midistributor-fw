@@ -2,6 +2,7 @@
  * The MIT License (MIT)
  *
  * Copyright (c) 2023 rppicomidi
+ * Copyright (c) 2024 Lena Kryger (lenkaud.io)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +23,6 @@
  * THE SOFTWARE.
  *
  */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -61,18 +61,32 @@ static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 static void led_blinking_task(void);
 static void midi_task(void);
 
-static void* midi_uarts[2]; // MIDI IN A, B and MIDI OUT A, B
-static void* midi_outs[4];  // MIDI OUT C-F
+typedef enum {
+  MIDI_A = 0,
+  MIDI_B = 1,
+  MIDI_C = 2,
+  MIDI_D = 3,
+  NUM_PHY_MIDI_PORT_PAIRS
+} LM_MIDI_PORT;
+
+static void* midi_uarts[NUM_PHY_MIDI_PORT_PAIRS]; // MIDI IN A-D and MIDI OUT A-D
+//static void* midi_outs[4];  // MIDI OUT C-F
+
 
 // MIDI UART pin usage (Move them if you want to)
-static const uint MIDI_OUT_A_GPIO = 4;
-static const uint MIDI_IN_A_GPIO = 5;
-static const uint MIDI_OUT_B_GPIO = 6;
-static const uint MIDI_IN_B_GPIO = 7;
-static const uint MIDI_OUT_C_GPIO = 10;
-static const uint MIDI_OUT_D_GPIO = 18;
-static const uint MIDI_OUT_E_GPIO = 3;
-static const uint MIDI_OUT_F_GPIO = 27;
+//static const uint MIDI_OUT_GPIO[NUM_PHY_MIDI_PORT_PAIRS]
+//static const uint MIDI_IN_GPIO[NUM_PHY_MIDI_PORT_PAIRS]
+//static const uint MIDI_IN_A_GPIO = 5;
+//static const uint MIDI_OUT_B_GPIO = 6;
+//static const uint MIDI_IN_B_GPIO = 7;
+//static const uint MIDI_OUT_C_GPIO = 10;
+//static const uint MIDI_OUT_D_GPIO = 18;
+//static const uint MIDI_OUT_E_GPIO = 3;
+//static const uint MIDI_OUT_F_GPIO = 27;
+
+static const size_t MIDI_TX_GPIO[NUM_PHY_MIDI_PORT_PAIRS]   = { 24, 25, 22, 23};
+static const size_t MIDI_RX_GPIO[NUM_PHY_MIDI_PORT_PAIRS]   = {  8,  9, 10, 11};
+static const size_t MIDI_TXEN_GPIO[NUM_PHY_MIDI_PORT_PAIRS] = { 20, 19, 18, 21};
 /*------------- MAIN -------------*/
 int main(void)
 {
@@ -81,14 +95,22 @@ int main(void)
   // init device stack on configured roothub port
   tud_init(BOARD_TUD_RHPORT);
 
-  // Create the MIDI UARTs and MIDI OUTs
-  midi_uarts[0] = pio_midi_uart_create(MIDI_OUT_A_GPIO, MIDI_IN_A_GPIO);
-  midi_uarts[1] = pio_midi_uart_create(MIDI_OUT_B_GPIO, MIDI_IN_B_GPIO);
-  midi_outs[0] = pio_midi_out_create(MIDI_OUT_C_GPIO);
-  midi_outs[1] = pio_midi_out_create(MIDI_OUT_D_GPIO);
-  midi_outs[2] = pio_midi_out_create(MIDI_OUT_E_GPIO);
-  midi_outs[3] = pio_midi_out_create(MIDI_OUT_F_GPIO);
-  printf("2-IN 6-OUT USB MIDI Device adapter\r\n");
+  // Create the MIDI UARTs
+  for(size_t n = 0; n < NUM_PHY_MIDI_PORT_PAIRS; n++) {
+    midi_uarts[n] = pio_midi_uart_create(MIDI_TX_GPIO[n], MIDI_RX_GPIO[n]);
+  }
+
+  // Set up MIDI TX EN for all 4 TX ports
+  uint txen_mask = 0u;
+  for(size_t n = 0; n < NUM_PHY_MIDI_PORT_PAIRS; n++) {
+    txen_mask |= 1 << MIDI_TXEN_GPIO[n];
+  }
+  gpio_init_mask(txen_mask);
+  gpio_set_dir_out_masked(txen_mask);
+  // Currently set TXEN to HIGH for all 4 ports
+  gpio_set_mask(txen_mask);
+
+  printf("4-IN 4-OUT USB MIDI Device adapter\r\n");
   // 
   while (1)
   {
@@ -137,7 +159,7 @@ static void poll_midi_uarts_rx(bool connected)
     uint8_t rx[48];
     // Pull any bytes received on the MIDI UART out of the receive buffer and
     // send them out via USB MIDI on virtual cable 0
-    for (uint8_t cable = 0; cable < 2; cable++) {
+    for (uint8_t cable = 0; cable < NUM_PHY_MIDI_PORT_PAIRS; cable++) {
         uint8_t nread = pio_midi_uart_poll_rx_buffer(midi_uarts[cable], rx, sizeof(rx));
         if (nread > 0 && connected)
         {
@@ -162,14 +184,14 @@ static void poll_usb_rx(bool connected)
     uint8_t npushed = 0;
     uint32_t nread =  tud_midi_demux_stream_read(&cable_num, rx, sizeof(rx));
     while (nread > 0) {
-        if (cable_num < 2) {
-            // then it is MIDI OUT A or B
+        if (cable_num < NUM_PHY_MIDI_PORT_PAIRS) {
+            // then it is MIDI OUT A-D
             npushed = pio_midi_uart_write_tx_buffer(midi_uarts[cable_num], rx, nread);
         }
-        else if (cable_num < 6) {
-            // then it is MIDI OUT C, D, E or F
-            npushed = pio_midi_out_write_tx_buffer(midi_outs[cable_num-2], rx, nread);
-        }
+        //else if (cable_num < 6) {
+        //    // then it is MIDI OUT C, D, E or F
+        //    npushed = pio_midi_out_write_tx_buffer(midi_outs[cable_num-2], rx, nread);
+        //}
         else {
             TU_LOG1("Received a MIDI packet on cable %u", cable_num);
             npushed = 0;
@@ -185,12 +207,12 @@ static void poll_usb_rx(bool connected)
 static void drain_serial_port_tx_buffers()
 {
     uint8_t cable;
-    for (cable = 0; cable < 2; cable++) {
+    for (cable = 0; cable < NUM_PHY_MIDI_PORT_PAIRS; cable++) {
         pio_midi_uart_drain_tx_buffer(midi_uarts[cable]);
     }
-    for (cable = 2; cable < 6; cable++) {
-        pio_midi_out_drain_tx_buffer(midi_outs[cable-2]);
-    }
+    //for (cable = 2; cable < 6; cable++) {
+    //    pio_midi_out_drain_tx_buffer(midi_outs[cable-2]);
+    //}
 }
 static void midi_task(void)
 {

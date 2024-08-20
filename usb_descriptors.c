@@ -2,6 +2,7 @@
  * The MIT License (MIT)
  *
  * Copyright (c) 2019 Ha Thach (tinyusb.org)
+ * Copyright (c) 2024 Lena Kryger (lenkaud.io)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,6 +26,7 @@
 
 #include "tusb.h"
 #include "midi_device_multistream.h"
+#include "pico/unique_id.h"
 
 /* A combination of interfaces must have a unique product id, since PC will save device driver after the first plug.
  * Same VID/PID with different interface e.g MSC (first), then CDC (later) will possibly cause system error on PC.
@@ -146,17 +148,17 @@ uint8_t const * tud_descriptor_configuration_cb(uint8_t index)
 char const* string_desc_arr [] =
 {
   (const char[]) { 0x09, 0x04 }, // 0: is supported language is English (0x0409)
-  "TinyUSB",                     // 1: Manufacturer
-  "TinyUSB Device",              // 2: Product
-  "123456",                      // 3: Serials, should use chip ID
+  "Lenkaudio",                   // 1: Manufacturer
+  "Lenkaudio MIDIstributor",     // 2: Product
+  "123456",                      // 3: Serials [unused, replaced by RP2040 flash ID]
   "MIDI IN A",
   "MIDI IN B",
+  "MIDI IN C",
+  "MIDI IN D",
   "MIDI OUT A",
   "MIDI OUT B",
   "MIDI OUT C",
   "MIDI OUT D",
-  "MIDI OUT E",
-  "MIDI OUT F",
 };
 
 static uint16_t _desc_str[32];
@@ -173,8 +175,17 @@ uint16_t const* tud_descriptor_string_cb(uint8_t index, uint16_t langid)
   {
     memcpy(&_desc_str[1], string_desc_arr[0], 2);
     chr_count = 1;
-  }else
-  {
+  }else if (index == 3) {
+    /* Serial */
+    #define SERIAL_LEN (17)
+    char serial[SERIAL_LEN] = {0};
+    pico_get_unique_board_id_string (serial, SERIAL_LEN);
+    // Convert ASCII string into UTF-16
+    for(uint8_t i=0; i<SERIAL_LEN; i++)
+      _desc_str[1+i] = serial[i];
+    chr_count = SERIAL_LEN;
+    
+  } else {
     // Note: the 0xEE index string is a Microsoft OS 1.0 Descriptors.
     // https://docs.microsoft.com/en-us/windows-hardware/drivers/usbcon/microsoft-defined-usb-descriptors
 
