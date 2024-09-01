@@ -4,9 +4,41 @@
 
 #### **⚠️ Under Development ⚠️**
 
-The hardware is being tested.
+The hardware **has design errors that will be corrected in V2**, see below.
 
 The software is currently a **work in progress**, as basic features are being implemented.
+
+### Current State - HW
+- V1 HW was tested and design errors were found
+  - V1 works after performing the following changes:
+    1. VDD is externally shorted with VBUS **or** +3V3 is provided externally
+    2. R31, R31, R37, R35 are removed, disabling the RX/Thru switch
+  - The hardware Rx/Thru switch function likely requires replacing R31-R38 with higher-valued resistors (and possibly adding buffers)
+- Planned V2 HW Changes: 
+  - The hardware Rx/Thru switch function will be removed and replaced with a software switch
+
+### Current State - SW
+
+- MIDI Routing
+  - Messages are transmitted between HW MIDI RX/TX ports and USB MIDI In/Out ports
+  - Currently only static routing is supported
+    
+    **Routing Table:**
+    | Rule 	| From            	| To              	| Messages 	|
+    |------	|-----------------	|-----------------	|----------	|
+    | 1    	| HW MIDI IN  A   	|  USB MIDI IN  1 	| ALL      	|
+    | 2    	| HW MIDI IN  B   	|  USB MIDI IN  2 	| ALL      	|
+    | 3    	| HW MIDI IN  C   	|  USB MIDI IN  3 	| ALL      	|
+    | 4    	| HW MIDI IN  D   	|  USB MIDI IN  4 	| ALL      	|
+    | 5    	| USB MIDI OUT 1  	|  HW MIDI OUT A  	| ALL      	|
+    | 6    	| USB MIDI OUT 2  	|  HW MIDI OUT B  	| ALL      	|
+    | 7    	| USB MIDI OUT 3  	|  HW MIDI OUT C  	| ALL      	|
+    | 8    	| USB MIDI OUT 4  	|  HW MIDI OUT D  	| ALL      	|
+
+- USB
+  - A Composite Device is defined with the following class definitions: MIDI, CDC, HID
+  - Currently only MIDI is correctly supported, CDC and HID are there as placeholders for future functions
+  - A custom Windows driver is planned
 
 ## Hardware Design
 
